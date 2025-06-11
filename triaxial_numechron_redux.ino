@@ -67,7 +67,6 @@
 
 /*
  * Define name on network (short name for web access : default : http://hc.local )
- * When using WIFI_SA, this name shall not exceed 15 characters
  */
 #define SNAME "tn"
 
@@ -78,7 +77,7 @@
  * Otherwise, various sites may help (ex: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)
  * Or search for "POSIX Timezone string", or <specific location> timezone string
  *
- * When using WIFI_SA, and not interested by automatic daylight saving switch you may just
+ * If not interested by automatic daylight saving switch you may just
  * remove or comment this line (add // before #define)
  */
 #define TZSTRING   "PST8PDT;M3.2.0;M11.1.0"
@@ -102,13 +101,13 @@
 
 /*
  * Control precedence of options (don't modify)
- * If none of WIFI_SA and WIFI_MULTI is defined (this is the default),
+ * If WIFI_MULTI is not defined (this is the default),
  * WIFI smart mode is used
  */
 #ifndef WIFI_MULTI
 /*
  * DO NOT MODIFY
- * Default to WIFI_SMART when none of WIFI_SA and WIFI_MULTI are defined
+ * Default to WIFI_SMART when WIFI_MULTI is not defined
  * Wifi smart config permits configuration of Wifi SSID and password initially
  * using the Expressif ESPTouch application on a phone device
  * HOWTO use this application in detail may be found on Internet
@@ -236,7 +235,7 @@ static void setTimezone ( const char * tzval )
 
 #ifdef TZSTRING
 /*
- * WIFI_SA mode and setting time according to defined Timezone
+ * Setting time according to defined Timezone
  * Daylight saving time MANAGED in this case
  */ 
 int setLocalTime(String et, String em)
@@ -263,7 +262,7 @@ int setLocalTime(String et, String em)
 #else // TZSTRING
 
 /*
- * WIFI_SA mode and setting time independently of Timezone (set it to GMT)
+ * Setting time independently of Timezone (set it to GMT)
  * Daylight saving time NOT MANAGED in this case
  */ 
 int setLocalTime(String dt, String ti, String em)
@@ -459,22 +458,7 @@ void wifiSetup()
 
 #endif // WIFI_MULTI
 
-#ifdef WIFI_SA
-
-#ifdef TZSTRING
-  Logger->print("WIFI Soft AP mode with TZ ");
-  Logger->println(TZSTRING);
-#else
-  Logger->println("WIFI Soft AP mode with no TZ");
-#endif
-
-  //define hostname
-  WiFi.setHostname(SNAME);
-
-  // wifi_changeAP function is not defined, removing call
-  // wifi_changeAP(1);
-
-#else
+#endif // WIFI_MULTI
 
   Logger->print("SSID: ");
   Logger->println(WiFi.SSID());
@@ -487,8 +471,6 @@ void wifiSetup()
     Logger->println("Error setting up MDNS responder!");
   else
     Logger->printf("MDNS responder set to '%s.local'\n", SNAME);
-
-#endif
 
   set_init_time();
 }
