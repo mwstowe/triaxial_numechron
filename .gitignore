@@ -1,0 +1,7 @@
+# Ignore WiFi credentials
+config.h
+
+# Other common files to ignore
+.pio
+.vscode
+.DS_Store

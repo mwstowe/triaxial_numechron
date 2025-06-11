@@ -1,0 +1,3 @@
+// Example WiFi credentials - Copy this file to config.h and update with your credentials
+#define WIFI_SSID1 "your_wifi_ssid"
+#define WIFI_PASS1 "your_wifi_password"
