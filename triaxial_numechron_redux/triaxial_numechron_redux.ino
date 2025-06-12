@@ -643,11 +643,6 @@ void web_svr_setup()
                 </div>
             </div>
         </div>
-
-        <footer class="mt-12 text-center text-gray-500 text-sm">
-            <p>&copy; 2024 Numechron Adjustments Inc. All rights reserved.</p>
-            <p>This is a simulated interface.</p>
-        </footer>
     </div>
 </body>
 </html>
