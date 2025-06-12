@@ -175,14 +175,6 @@
 #include <esp_sntp.h> 
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h> // for ESP32Async (formerly me-no-dev) library
-#ifdef USE_TELNET
-#include <TelnetStream2.h>
-#endif
-
-#ifdef USE_OTA
-#include <Update.h>
-#define U_PART U_SPIFFS
-#endif
 
 #include <ESPmDNS.h>
 
@@ -495,7 +487,7 @@ int seq[4][4] = {
 };
 
 // Previous clock position (modified for adjusting offset / fine tunning)
-static long prev_pos = 0;
+static long prev_pos = -1;
 
 void rotate(int step) {
   static int phase = 0;
@@ -519,7 +511,7 @@ void rotate(int step) {
 }
 
 void loop() {
-  static long prev_min = 0, prev_pos = -1;
+  static long prev_min = 0;
   long min;
   static long pos;
   struct tm tmtime; 
@@ -557,16 +549,10 @@ void loop() {
     prev_pos = STEPS_PER_ROTATION * min;
   }
   
-  Logger->print("Minute:Previous minute ");
-  Logger->printf("%02d:%02d\n",
-                min, prev_min);
   prev_min = min;
   pos = (STEPS_PER_ROTATION * min);
   rotate(-10); // for approach run
   rotate(10); // approach run without heavy load
-  Logger->print("Position:Previous position ");
-  Logger->printf("%02d:%02d\n",
-                pos, prev_pos);
 
   if(pos - prev_pos > 0) {
     rotate(pos - prev_pos);
