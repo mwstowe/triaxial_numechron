@@ -50,14 +50,8 @@
  *
  * In order to permit access to the clock without knowledge of its IP address,
  * the sketch implements the mDNS service
- * The clock WEB page should be available at http://hc.local
+ * The clock WEB page should be available at http://tn.local
  * (name may be changed by modifying SNAME below)
- * However, this is just provided on a best effort basis, because :
- * + does not work consistently on all Windows platforms (probably depends on Wifi adapter) 
- * + works on Android only on version 12 and above
- * + tested ok on IOS 18 (probably work also on some previous versions)
- *
- * Good setting
  */
 
 /*
@@ -129,7 +123,7 @@
 
 // Specify up to MAX_SSID credential here
 // Dont't forget to indicate the number of credential in NB_SSID
-#include "config.h"           // Include WiFi credentials from separate file
+#include "../config.h"           // Include WiFi credentials from separate file; you can comment out 
 #define WIFI_SSID2 ""
 #define WIFI_PASS2 ""
 #define WIFI_SSID3 ""
@@ -455,8 +449,6 @@ void wifiSetup()
     wifiMulti.addAP(wfi[i%NB_SSID].w_ssid, wfi[i%NB_SSID].w_pwd);    
 
   while ( (wifiMulti.run() != WL_CONNECTED) );
-
-#endif // WIFI_MULTI
 
 #endif // WIFI_MULTI
 
