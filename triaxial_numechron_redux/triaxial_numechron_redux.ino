@@ -123,7 +123,7 @@
 
 // Specify up to MAX_SSID credential here
 // Dont't forget to indicate the number of credential in NB_SSID
-#include "../config.h"           // Include WiFi credentials from separate file; you can comment out 
+#include "config.h"              // Include WiFi credentials from separate file; you can comment out 
 #define WIFI_SSID2 ""
 #define WIFI_PASS2 ""
 #define WIFI_SSID3 ""
@@ -177,10 +177,27 @@
 #include <ESPAsyncWebServer.h> // for ESP32Async (formerly me-no-dev) library
 
 #include <ESPmDNS.h>
+#include <Preferences.h>
 
 #include <stdio.h>
 
 Stream * Logger = &Serial;
+
+/*****************************************************/
+/* Calibration                                       */
+/*****************************************************/
+
+Preferences prefs;
+
+// Calibration correction: fractional steps to add per minute advance
+float step_correction = 0.0;
+float correction_accumulator = 0.0;
+
+// Calibration state
+enum CalState { CAL_IDLE, CAL_MEASURING };
+CalState cal_state = CAL_IDLE;
+unsigned long cal_start_minutes = 0;  // epoch minutes when calibration started
+int cal_nudge_steps = 0;              // total nudge steps applied during adjustment
 
 /*****************************************************/
 /* Wifi / Time Management                            */
@@ -519,6 +536,9 @@ void loop() {
   // Handle pending rotation requests from web interface
   if (rotation_pending) {
     rotate(steps_to_rotate);
+    if (cal_state != CAL_IDLE) {
+      cal_nudge_steps += steps_to_rotate;
+    }
     rotation_pending = false;
     hold_update = 0;  // Release the hold after rotation completes
     return;  // Skip the rest of the loop after handling rotation
@@ -555,7 +575,12 @@ void loop() {
   rotate(10); // approach run without heavy load
 
   if(pos - prev_pos > 0) {
-    rotate(pos - prev_pos);
+    int raw_steps = pos - prev_pos;
+    int advances = raw_steps / STEPS_PER_ROTATION;
+    float total = raw_steps + (step_correction * advances) + correction_accumulator;
+    int actual_steps = (int)round(total);
+    correction_accumulator = total - actual_steps;
+    rotate(actual_steps);
   }
   if(min == 10) {
     prev_pos = 0;
@@ -578,10 +603,8 @@ void notFound(AsyncWebServerRequest *request)
 
 void web_svr_setup()
 {
- // cvt_time(StopTime, &stop_hour, &stop_min);
- // cvt_time(StartTime, &start_hour, &start_min);
 
- const char mainpage_html[] PROGMEM = R"rawliteral(
+ static const char mainpage_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -634,13 +657,23 @@ void web_svr_setup()
             <div class="p-6 sm:p-8 bg-slate-800/50 rounded-xl shadow-2xl backdrop-blur-md border border-slate-700">
                 <h2 class="text-3xl font-bold text-center text-sky-400 mb-8">Adjust Alignment</h2>
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-                    <a href="/nudge_minus_5_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-red-600 hover:bg-red-700">-5%</a>
-                    <a href="/nudge_minus_1_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-red-600 hover:bg-red-700">-1%</a>
-                    <a href="/nudge_plus_1_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+1%</a>
-                    <a href="/nudge_plus_5_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+5%</a>
-                    <a href="/nudge_plus_10_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+10%</a>
-                    <a href="/nudge_plus_50_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+50%</a>
+                    <a href="/nudge_minus_5_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-red-600 hover:bg-red-700">-5%%</a>
+                    <a href="/nudge_minus_1_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-red-600 hover:bg-red-700">-1%%</a>
+                    <a href="/nudge_plus_1_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+1%%</a>
+                    <a href="/nudge_plus_5_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+5%%</a>
+                    <a href="/nudge_plus_10_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+10%%</a>
+                    <a href="/nudge_plus_50_percent" class="no-underline flex items-center justify-center font-semibold py-3 px-4 sm:px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-sky-600 hover:bg-sky-500 focus:ring-sky-400">+50%%</a>
                 </div>
+            </div>
+
+            <!-- Calibration Section -->
+            <div class="p-6 sm:p-8 bg-slate-800/50 rounded-xl shadow-2xl backdrop-blur-md border border-slate-700">
+                <h2 class="text-3xl font-bold text-center text-amber-400 mb-4">Calibration</h2>
+                <p class="text-sm text-gray-400 text-center mb-6">Adjust display until correct, then press the button. After drift appears, nudge to fix, then press again to save correction.</p>
+                <div class="flex justify-center">
+                    <a href="/cal" class="no-underline flex items-center justify-center font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-opacity-50 text-white bg-amber-600 hover:bg-amber-500 focus:ring-amber-400">Display Is Correct</a>
+                </div>
+                <p class="text-sm text-gray-400 text-center mt-4">Correction: %CAL_VALUE% steps/advance | Status: %CAL_STATUS%</p>
             </div>
         </div>
     </div>
@@ -649,11 +682,18 @@ void web_svr_setup()
  )rawliteral";
 
   // Send web page with input fields to client
-  server.on("/", HTTP_GET, [mainpage_html](AsyncWebServerRequest *request){
-    request->send(200, "text/html", mainpage_html );
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", mainpage_html, [](const String& var) -> String {
+      if (var == "CAL_VALUE") return String(step_correction, 4);
+      if (var == "CAL_STATUS") {
+        if (cal_state == CAL_IDLE) return "Idle";
+        return "Measuring (" + String(cal_nudge_steps) + " steps)";
+      }
+      return String();
+    });
   });
 
-  server.on("/plus1m", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/plus1m", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 1 MIN\n");
     hold_update = 1;
@@ -662,7 +702,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/plus3m", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/plus3m", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 3 MIN\n");
     hold_update = 1;
@@ -671,7 +711,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/plus5m", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/plus5m", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 5 MIN\n");
     hold_update = 1;
@@ -680,7 +720,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/plus7m", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/plus7m", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 7 MIN\n");
     hold_update = 1;
@@ -689,7 +729,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/nudge_minus_5_percent", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/nudge_minus_5_percent", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("DECR 5%\n");
     hold_update = 1;
@@ -698,7 +738,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/nudge_minus_1_percent", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/nudge_minus_1_percent", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("DECR 1%\n");
     hold_update = 1;
@@ -707,7 +747,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/nudge_plus_5_percent", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/nudge_plus_5_percent", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 5%\n");
     hold_update = 1;
@@ -716,7 +756,7 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/nudge_plus_10_percent", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/nudge_plus_10_percent", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 10%\n");
     hold_update = 1;
@@ -726,7 +766,7 @@ void web_svr_setup()
   });
 
 
-  server.on("/nudge_plus_1_percent", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/nudge_plus_1_percent", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 1%\n");
     hold_update = 1;
@@ -735,12 +775,34 @@ void web_svr_setup()
     request->redirect("/");
   });
 
-  server.on("/nudge_plus_50_percent", HTTP_GET, [mainpage_html] (AsyncWebServerRequest *request)
+  server.on("/nudge_plus_50_percent", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     Logger->printf("INCR 50%\n");
     hold_update = 1;
     rotation_pending = true;
     steps_to_rotate = STEPS_PER_ROTATION/2;
+    request->redirect("/");
+  });
+
+  server.on("/cal", HTTP_GET, [] (AsyncWebServerRequest *request)
+  {
+    unsigned long now_minutes = time(NULL) / 60;
+
+    if (cal_state == CAL_MEASURING) {
+      long elapsed = now_minutes - cal_start_minutes;
+      if (elapsed > 0 && cal_nudge_steps != 0) {
+        step_correction = (float)cal_nudge_steps / (float)elapsed;
+        correction_accumulator = 0.0;
+        prefs.putFloat("stepcorr", step_correction);
+        Logger->printf("Calibration saved: %d steps / %ld min = %.4f steps/advance\n",
+                       cal_nudge_steps, elapsed, step_correction);
+      }
+    }
+
+    cal_start_minutes = now_minutes;
+    cal_nudge_steps = 0;
+    cal_state = CAL_MEASURING;
+    Logger->printf("Calibration marked at minute %lu\n", now_minutes);
     request->redirect("/");
   });
 
@@ -760,6 +822,10 @@ void setup()
 
   Logger->println("");
   Logger->println("Start Triaxial Numechron");
+
+  prefs.begin("clock", false);
+  step_correction = prefs.getFloat("stepcorr", 0.0);
+  Logger->printf("Loaded calibration: %.3f steps/advance\n", step_correction);
 
   pinMode(port[0], OUTPUT);
   pinMode(port[1], OUTPUT);

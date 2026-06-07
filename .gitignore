@@ -1,5 +1,5 @@
 # Ignore WiFi credentials
-config.h
+triaxial_numechron_redux/config.h
 
 # Other common files to ignore
 .pio

@@ -8,8 +8,8 @@ This sketch is specifically for keeping the Triaxial Numechron synchronized with
 
 To set up your WiFi credentials:
 
-1. Copy `config.h.example` to `config.h`
-2. Edit `config.h` and update with your WiFi credentials:
+1. Copy `triaxial_numechron_redux/config.h.example` to `triaxial_numechron_redux/config.h`
+2. Edit `triaxial_numechron_redux/config.h` and update with your WiFi credentials:
    ```cpp
    #define WIFI_SSID1 "your_wifi_ssid"
    #define WIFI_PASS1 "your_wifi_password"
