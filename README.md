@@ -35,3 +35,19 @@ Once powered up, the clock will advance the minutes by one. After connecting to 
 ## Web Interface
 
 The clock provides a web interface at http://tn.local (when mDNS is working) or at the device's IP address.
+
+## Calibration
+
+Over time, the minute display may drift from what the clock thinks it's showing due to slight mechanical imprecision in the stepper/gear train. The web interface includes a calibration feature to correct for this.
+
+**Important:** Wait a minute or two after boot for the clock to settle and sync with NTP before starting calibration.
+
+### Procedure
+
+1. Use the alignment buttons to nudge the display until it's showing the correct time.
+2. Press **"Display Is Correct"** to mark the starting point.
+3. Wait — days or weeks — until visible drift appears.
+4. Use the alignment buttons to nudge the display back to the correct position.
+5. Press **"Display Is Correct"** again. The clock calculates the correction (nudge steps ÷ elapsed minutes) and saves it to flash.
+
+The correction is automatically applied to every subsequent minute advance. The longer you wait between steps 2 and 4, the more precise the correction will be. After saving, the clock immediately begins a new measurement period, so you can refine the correction over time by repeating steps 3–5.
