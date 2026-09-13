@@ -5,3 +5,5 @@ triaxial_numechron_redux/config.h
 .pio
 .vscode
 .DS_Store
+# Ignore Kiro directory (settings, local agent state, etc.)
+.kiro/
